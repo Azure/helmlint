@@ -3,6 +3,19 @@
 > Work in progress!
 
 
+## Why?
+
+TODO
+
+
+## Usage
+
+```bash
+go install github.com/Azure/helmlint@latest
+helmlint ./path/to/chart
+```
+
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a

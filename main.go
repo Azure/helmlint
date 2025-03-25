@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -94,7 +95,7 @@ func run(srcChart, fixturesDir string, preserve bool) error {
 		return err
 	}
 
-	ids, err := discoverComments(resultsDir)
+	ids, err := discoverComments(resultsDir, &grp)
 	if err != nil {
 		return fmt.Errorf("discovering comments: %w", err)
 	}
@@ -128,7 +129,8 @@ var conditionalRegex = regexp.MustCompile(`{{-?\s*if`)
 func injectComments(dir string, grp *errgroup.Group) (map[string]string, error) {
 	lock := sync.Mutex{}
 	comments := make(map[string]string)
-	return comments, filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -161,6 +163,50 @@ func injectComments(dir string, grp *errgroup.Group) (map[string]string, error) 
 
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	return comments, grp.Wait()
+}
+
+func discoverComments(dir string, grp *errgroup.Group) ([]string, error) {
+	const prefix = "# helmlint: "
+	ids := []string{}
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || !strings.HasSuffix(info.Name(), ".yaml") {
+			return nil
+		}
+
+		grp.Go(func() error {
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			r := bufio.NewScanner(file)
+			for r.Scan() {
+				line := r.Text()
+				if strings.Contains(line, prefix) {
+					ids = append(ids, strings.TrimPrefix(strings.TrimSpace(line), prefix))
+				}
+			}
+
+			return nil
+		})
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return ids, grp.Wait()
 }
 
 func findIndentation(lines []string, start int) int {
@@ -171,30 +217,4 @@ func findIndentation(lines []string, start int) int {
 		}
 	}
 	return len(lines[start]) - len(strings.TrimLeft(lines[start], " "))
-}
-
-func discoverComments(dir string) ([]string, error) {
-	ids := []string{}
-	return ids, filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() || !strings.HasSuffix(info.Name(), ".yaml") {
-			return nil
-		}
-
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-
-		for _, line := range strings.Split(string(content), "\n") {
-			const prefix = "# helmlint: "
-			if strings.Contains(line, prefix) {
-				ids = append(ids, strings.TrimPrefix(strings.TrimSpace(line), prefix))
-			}
-		}
-
-		return nil
-	})
 }

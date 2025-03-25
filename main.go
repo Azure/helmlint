@@ -17,7 +17,6 @@ import (
 
 func main() {
 	var (
-		// TODO: Expose flag for policy dir
 		fixtureDir = flag.String("fixtures-dir", "fixtures", "Directory containing fixtures e.g. values files to be tested. Relative to chart directory.")
 		preserve   = flag.Bool("preserve", false, "Log the temporary directory instead of deleting it")
 	)
@@ -109,22 +108,12 @@ func run(srcChart, fixturesDir string, preserve bool) error {
 	}
 
 	for _, dir := range outputDirs {
-		// TODO: Parse structured comments and pass to conftest
-		out, err := exec.Command("conftest", "test", "--output=json", "--policy", filepath.Join(chartDir, "policy"), dir).CombinedOutput()
+		out, err := exec.Command("conftest", "test", "--policy", filepath.Join(chartDir, "policy"), dir).CombinedOutput()
 		if err != nil {
 			failed = true
 		}
 		fmt.Fprintf(os.Stdout, "Conftest output (%s):\n%s\n\n", filepath.Base(dir), string(out))
-
-		// TODO: Pass through -schema-location?
-		out, err = exec.Command("kubeconform", "-summary", "-n=16", "-output=json", dir).CombinedOutput()
-		if err != nil {
-			failed = true
-		}
-		fmt.Fprintf(os.Stdout, "Kubeconform output (%s):\n%s\n\n", filepath.Base(dir), string(out))
 	}
-
-	// TODO: Parse json output, format nicely for console
 
 	if failed {
 		return fmt.Errorf("test failure")

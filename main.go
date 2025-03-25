@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
@@ -42,8 +44,7 @@ func run(srcChart, fixturesDir string, preserve bool) error {
 			fmt.Fprintf(os.Stdout, "Preserving temporary directory: %s\n", dir)
 			return
 		}
-
-		err = os.RemoveAll(dir)
+		os.RemoveAll(dir)
 	}()
 
 	chartDir := filepath.Join(dir, "chart")
@@ -54,7 +55,9 @@ func run(srcChart, fixturesDir string, preserve bool) error {
 		return fmt.Errorf("copying chart: %w", err)
 	}
 
-	comments, err := injectComments(chartDir)
+	var grp errgroup.Group
+	grp.SetLimit(runtime.NumCPU() * 2)
+	comments, err := injectComments(chartDir, &grp)
 	if err != nil {
 		return fmt.Errorf("injecting comments: %w", err)
 	}
@@ -69,8 +72,6 @@ func run(srcChart, fixturesDir string, preserve bool) error {
 		return fmt.Errorf("reading fixtures directory: %w", err)
 	}
 
-	var grp errgroup.Group
-	grp.SetLimit(runtime.NumCPU() * 2)
 	outputDirs := []string{}
 	for _, fixture := range fixtures {
 		if fixture.IsDir() || !strings.HasSuffix(fixture.Name(), ".yaml") {
@@ -98,24 +99,25 @@ func run(srcChart, fixturesDir string, preserve bool) error {
 		return fmt.Errorf("discovering comments: %w", err)
 	}
 
-	var failed bool
 	for id, def := range comments {
-		if slices.Contains(ids, id) {
-			continue
-		}
-		fmt.Fprintf(os.Stdout, "FAIL:\n  Branch was not found in the rendered chart output.\n  %s\n\n\n", def)
-		failed = true
+		grp.Go(func() error {
+			if slices.Contains(ids, id) {
+				return nil
+			}
+			fmt.Fprintf(os.Stdout, "FAIL:\n  Branch was not found in the rendered chart output.\n  %s\n\n\n", def)
+			return errors.New("branch not found")
+		})
 	}
 
 	for _, dir := range outputDirs {
-		out, err := exec.Command("conftest", "test", "--policy", filepath.Join(chartDir, "policy"), dir).CombinedOutput()
-		if err != nil {
-			failed = true
-		}
-		fmt.Fprintf(os.Stdout, "Conftest output (%s):\n%s\n\n", filepath.Base(dir), string(out))
+		grp.Go(func() error {
+			out, err := exec.Command("conftest", "test", "--policy", filepath.Join(chartDir, "policy"), dir).CombinedOutput()
+			fmt.Fprintf(os.Stdout, "Conftest output (%s):\n%s\n\n", filepath.Base(dir), string(out))
+			return err
+		})
 	}
 
-	if failed {
+	if grp.Wait() != nil {
 		return fmt.Errorf("test failure")
 	}
 	return nil
@@ -123,7 +125,8 @@ func run(srcChart, fixturesDir string, preserve bool) error {
 
 var conditionalRegex = regexp.MustCompile(`{{-?\s*if`)
 
-func injectComments(dir string) (map[string]string, error) {
+func injectComments(dir string, grp *errgroup.Group) (map[string]string, error) {
+	lock := sync.Mutex{}
 	comments := make(map[string]string)
 	return comments, filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -133,24 +136,30 @@ func injectComments(dir string) (map[string]string, error) {
 			return nil
 		}
 
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-
-		lines := strings.Split(string(content), "\n")
-		for i, line := range lines {
-			if !conditionalRegex.MatchString(line) || strings.Contains(line, "helmlint:ignore") {
-				continue
+		grp.Go(func() error {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
 			}
-			id := uuid.NewString()
-			comments[id] = strings.TrimSpace(line)
 
-			indentation := strings.Repeat(" ", findIndentation(lines, i))
-			lines[i] = fmt.Sprintf("%s\n%s# helmlint: %s", line, indentation, id)
-		}
+			lines := strings.Split(string(content), "\n")
+			for i, line := range lines {
+				if !conditionalRegex.MatchString(line) || strings.Contains(line, "helmlint:ignore") {
+					continue
+				}
+				id := uuid.NewString()
+				indentation := strings.Repeat(" ", findIndentation(lines, i))
 
-		return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
+				lock.Lock()
+				comments[id] = strings.TrimSpace(line)
+				lines[i] = fmt.Sprintf("%s\n%s# helmlint: %s", line, indentation, id)
+				lock.Unlock()
+			}
+
+			return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
+		})
+
+		return nil
 	})
 }
 

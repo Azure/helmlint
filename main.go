@@ -87,7 +87,7 @@ func run(srcChart, fixturesDir string, preserve bool, schemaLocation string) err
 		grp.Go(func() error {
 			out, err := exec.Command("helm", "template", "--output-dir", dir, "--values", fixturePath, chartDir).CombinedOutput()
 			if err != nil {
-				return fmt.Errorf("rendering chart: %s", string(out))
+				return fmt.Errorf("rendering chart with fixture %q: %s", fixture.Name(), string(out))
 			}
 			return nil
 		})
@@ -156,16 +156,28 @@ func injectComments(dir string) (map[string]string, error) {
 
 		lines := strings.Split(string(content), "\n")
 		for i, line := range lines {
-			if !conditionalRegex.MatchString(line) {
+			if !conditionalRegex.MatchString(line) || strings.Contains(line, "helmlint:ignore") {
 				continue
 			}
 			id := uuid.NewString()
 			comments[id] = strings.TrimSpace(line)
-			lines[i] = fmt.Sprintf("%s\n # helmlint: %s", line, id)
+
+			indentation := strings.Repeat(" ", findIndentation(lines, i))
+			lines[i] = fmt.Sprintf("%s\n%s# helmlint: %s", line, indentation, id)
 		}
 
 		return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)
 	})
+}
+
+func findIndentation(lines []string, start int) int {
+	for i := start; i >= 0; i-- {
+		if strings.HasSuffix(strings.TrimSpace(lines[i]), "|") {
+			prevIndent := len(lines[i]) - len(strings.TrimLeft(lines[i], " "))
+			return prevIndent + 2
+		}
+	}
+	return len(lines[start]) - len(strings.TrimLeft(lines[start], " "))
 }
 
 func discoverComments(dir string) ([]string, error) {

@@ -2,8 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: simple-example
-{{- if .Values.value }}
+{{- if true }}
 {{- else }}
   labels:
-    example.com/value: the-value
+    example.com/forbidden-label: {{ .Values.value }}
 {{- end }}

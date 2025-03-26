@@ -67,8 +67,18 @@ func TestLintFailure_Recursion_TopLevel(t *testing.T) {
 	assert.Contains(t, ft.Errors[1], "simple-example-deploy must not include the forbidden label")
 }
 
-func TestLintElse(t *testing.T) {
-	Lint(t, WithChartDir("fixtures/else"))
+func TestLintMissingIfBranch(t *testing.T) {
+	ft := &fakeT{T: t}
+	Lint(ft, WithChartDir("fixtures/missing-if-branch"))
+	require.Len(t, ft.Errors, 1)
+	assert.Contains(t, ft.Errors[0], "Branch was not found")
+}
+
+func TestLintMissingElseBranch(t *testing.T) {
+	ft := &fakeT{T: t}
+	Lint(ft, WithChartDir("fixtures/missing-else-branch"))
+	require.Len(t, ft.Errors, 1)
+	assert.Contains(t, ft.Errors[0], "Branch was not found")
 }
 
 func TestCommentInjection(t *testing.T) {

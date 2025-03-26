@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: simple-example
-{{ if true }}
+{{- if false }}
   labels:
-    example.com/value: {{ .Values.value }}
-{{ end }}
+    example.com/forbidden-label: {{ .Values.value }}
+{{- end }}

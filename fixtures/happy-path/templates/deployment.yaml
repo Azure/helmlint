@@ -1,0 +1,6 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-example
+  labels:
+    example.com/value: {{ .Values.value }}

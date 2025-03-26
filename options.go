@@ -1,25 +1,36 @@
 package helmlint
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 )
 
 type Option func(*options)
 
-// WithMaxConcurrency sets the maximum number of concurrent goroutines used by the linters.
-// Defaults to 2 * runtime.NumCPU().
-func WithMaxConcurrency(n int) Option {
-	return func(o *options) {
-		o.Concurrency = n
-	}
-}
-
 // WithPreserve causes the temporary directory to be logged after the test instead of being deleted.
 // Useful for debugging.
 func WithPreserve() Option {
 	return func(o *options) {
 		o.Preserve = true
+	}
+}
+
+// WithWriteExceptions causes the linter to update the chart to ignore conditional branches that
+// are not currently covered by the given fixtures.
+//
+// Disabled by default. Can also be enabled by setting HELMLINT_WRITE_EXCEPTIONS=true.
+func WithWriteExceptions() Option {
+	return func(o *options) {
+		o.WriteExceptions = true
+	}
+}
+
+// WithMaxConcurrency sets the maximum number of concurrent goroutines used by the linters.
+// Defaults to 2 * runtime.NumCPU().
+func WithMaxConcurrency(n int) Option {
+	return func(o *options) {
+		o.Concurrency = n
 	}
 }
 
@@ -46,16 +57,21 @@ func WithPoliciesDir(dir string) Option {
 }
 
 type options struct {
-	Preserve    bool
-	Concurrency int
-	ChartDir    string
-	FixturesDir string
-	PoliciesDir string
+	Preserve        bool
+	WriteExceptions bool
+	Concurrency     int
+	ChartDir        string
+	FixturesDir     string
+	PoliciesDir     string
 }
 
 func (o *options) Finalize() (err error) {
 	if o.Concurrency == 0 {
 		o.Concurrency = runtime.NumCPU() * 2
+	}
+
+	if !o.WriteExceptions {
+		o.WriteExceptions = os.Getenv("HELMLINT_WRITE_EXCEPTIONS") == "true"
 	}
 
 	o.ChartDir, err = filepath.Abs(o.ChartDir)

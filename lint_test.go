@@ -8,8 +8,15 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func TestHappyPath(t *testing.T) {
-	Lint(t, WithChartDir("fixtures/happy-path"))
+func TestHappyPath_Simple(t *testing.T) {
+	Lint(t, WithChartDir("fixtures/simple"))
+}
+
+func TestHappyPath_Recursion(t *testing.T) {
+	Lint(t,
+		WithChartDir("fixtures/recursive"),
+		WithRecursion(RecurseConfigmap("recursive/templates/configmap.yaml")),
+	)
 }
 
 func TestCommentInjection(t *testing.T) {

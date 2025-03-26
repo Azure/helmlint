@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Option func(*options)
@@ -82,6 +84,32 @@ type RecursionFn func(renderedDir, outputDir string) error
 type recursionRule struct {
 	Fn   RecursionFn
 	Opts *options
+}
+
+// RecurseConfigmap recurses into resource manifests stored in each key of a ConfigMap at the given file path relative to the chart output.
+func RecurseConfigmap(manifestPath string) RecursionFn {
+	return func(chartDir, outputDir string) error {
+		confMap := struct {
+			Data map[string]string
+		}{}
+
+		body, err := os.ReadFile(filepath.Join(chartDir, manifestPath))
+		if err != nil {
+			return err
+		}
+
+		if err := yaml.Unmarshal(body, &confMap); err != nil {
+			return err
+		}
+
+		for key, value := range confMap.Data {
+			err = os.WriteFile(filepath.Join(outputDir, key+".yaml"), []byte(value), 0644)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 }
 
 type options struct {

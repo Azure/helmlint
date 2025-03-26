@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simple-example
+data:
+  myManifest: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: simple-example
+      labels:
+        example.com/value: {{ .Values.value }}

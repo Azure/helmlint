@@ -46,9 +46,10 @@ func WithChartDir(dir string) Option {
 }
 
 // WithFixturesDir overrides the default fixtures directory, which is "fixtures" in the chart directory.
+// Multiple fixtures directores are supported.
 func WithFixturesDir(dir string) Option {
 	return func(o *options) {
-		o.FixturesDir = dir
+		o.FixturesDirs = append(o.FixturesDirs, dir)
 	}
 }
 
@@ -129,7 +130,7 @@ type options struct {
 	WriteExceptions bool
 	Concurrency     int
 	ChartDir        string
-	FixturesDir     string
+	FixturesDirs    []string
 	PoliciesDir     string
 	Recursions      []*recursionRule
 	Visitors        []VisitorFn
@@ -149,9 +150,14 @@ func (o *options) Finalize() (err error) {
 		return err
 	}
 
-	o.FixturesDir, err = o.chartRelPath(o.FixturesDir, "fixtures")
-	if err != nil {
-		return err
+	if len(o.FixturesDirs) == 0 {
+		o.FixturesDirs = []string{""}
+	}
+	for i, dir := range o.FixturesDirs {
+		o.FixturesDirs[i], err = o.chartRelPath(dir, "fixtures")
+		if err != nil {
+			return err
+		}
 	}
 
 	o.PoliciesDir, err = o.chartRelPath(o.PoliciesDir, "policies")

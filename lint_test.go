@@ -3,6 +3,7 @@ package helmlint
 import (
 	"fmt"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -108,11 +109,15 @@ func TestCreateTempDir(t *testing.T) {
 
 type fakeT struct {
 	*testing.T
+	lock   sync.Mutex
 	Errors []string
 }
 
 func (f *fakeT) Errorf(format string, args ...interface{}) {
 	str := fmt.Sprintf(format, args...)
 	f.T.Logf("Errorf was called:\n%s", str)
+
+	f.lock.Lock()
 	f.Errors = append(f.Errors, str)
+	f.lock.Unlock()
 }

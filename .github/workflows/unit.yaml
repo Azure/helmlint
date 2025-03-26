@@ -29,4 +29,4 @@ jobs:
           sudo mv conftest /usr/local/bin
 
       - name: Run tests
-        run: go test -v ./...
+        run: go test -race -v

@@ -111,7 +111,7 @@ func copyChart(t T, dir, tempDir string) string {
 	return chartDir
 }
 
-var conditionalRegex = regexp.MustCompile(`{{-?\s*if`)
+var conditionalRegex = regexp.MustCompile(`{{-?\s*(if|else)`)
 
 type conditionalDeclRef struct {
 	File string // relative to chart directory

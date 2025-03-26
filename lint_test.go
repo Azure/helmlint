@@ -67,6 +67,10 @@ func TestLintFailure_Recursion_TopLevel(t *testing.T) {
 	assert.Contains(t, ft.Errors[1], "simple-example-deploy must not include the forbidden label")
 }
 
+func TestLintElse(t *testing.T) {
+	Lint(t, WithChartDir("fixtures/else"))
+}
+
 func TestCommentInjection(t *testing.T) {
 	firstCopy := copyChart(t, "./examples/simple-chart", t.TempDir())
 	secondCopy := copyChart(t, "./examples/simple-chart", t.TempDir())

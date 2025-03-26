@@ -1,0 +1,9 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-example
+{{- if .Values.value }}
+{{- else }}
+  labels:
+    example.com/value: the-value
+{{- end }}

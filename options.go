@@ -61,6 +61,7 @@ func WithPoliciesDir(dir string) Option {
 
 // WithRecursion provides a hook for extracting a k8s manifest to be linted out of another resource.
 // For example: if a chart renders some resources into a configmap, this hook can be used to lint the "nested" resources.
+// Multiple recursions are allowed.
 // Only the WithPolicyDir option is supported.
 func WithRecursion(fn RecursionFn, opts ...Option) Option {
 	return func(o *options) {
@@ -112,6 +113,17 @@ func RecurseConfigmap(manifestPath string) RecursionFn {
 	}
 }
 
+// WithVisitor is called for every fixture and given the path of the rendered chart directory.
+// Multiple visitors are allowed.
+// Might be called concurrently!
+func WithVisitor(fn VisitorFn) Option {
+	return func(o *options) {
+		o.Visitors = append(o.Visitors, fn)
+	}
+}
+
+type VisitorFn func(t T, dir string)
+
 type options struct {
 	Preserve        bool
 	WriteExceptions bool
@@ -120,6 +132,7 @@ type options struct {
 	FixturesDir     string
 	PoliciesDir     string
 	Recursions      []*recursionRule
+	Visitors        []VisitorFn
 }
 
 func (o *options) Finalize() (err error) {

@@ -17,16 +17,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// TODO:
-// - Structured comments
-// - Hooks for arbitrary funcs to walk the rendered snapshots
-// - Support custom conftest binary?
-
 type T interface {
 	Logf(format string, args ...interface{})
 	Errorf(format string, args ...interface{})
 	Fatalf(format string, args ...interface{})
 	Cleanup(func())
+	FailNow()
 }
 
 func Lint(t T, args ...Option) {
@@ -296,6 +292,13 @@ func walkRenderedChart(t T, opts *options, grp *errgroup.Group, dir string, outp
 		grp.Go(func() error {
 			return runConftest(t, opts.PoliciesDir, dir)
 		})
+
+		for _, fn := range opts.Visitors {
+			grp.Go(func() error {
+				fn(t, dir)
+				return nil
+			})
+		}
 
 		// "recurse" into resources contained within rendered resources
 		for i, rule := range opts.Recursions {

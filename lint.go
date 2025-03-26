@@ -186,27 +186,26 @@ func renderChart(t T, opts *options, grp *errgroup.Group, chartDir, resultsDir s
 	}()
 
 	for _, fixturesDir := range opts.FixturesDirs {
-		fixtures, err := os.ReadDir(fixturesDir)
-		if err != nil {
-			t.Fatalf("reading fixtures: %s", err)
-		}
-
-		for _, fixture := range fixtures {
-			if fixture.IsDir() || filepath.Ext(fixture.Name()) != ".yaml" {
-				continue
+		err := filepath.Walk(fixturesDir, func(path string, info os.FileInfo, err error) error {
+			if info.IsDir() || filepath.Ext(path) != ".yaml" {
+				return nil
 			}
 
-			fixturePath := filepath.Join(fixturesDir, fixture.Name())
-			outputPath := filepath.Join(resultsDir, fixture.Name()[:len(fixture.Name())-len(".yaml")])
+			outputPath := filepath.Join(resultsDir, filepath.Base(path[:len(path)-len(".yaml")]))
 			outputDirs = append(outputDirs, outputPath)
 
 			grp.Go(func() error {
-				out, err := exec.Command("helm", "template", "--output-dir", outputPath, "--values", fixturePath, chartDir).CombinedOutput()
+				out, err := exec.Command("helm", "template", "--output-dir", outputPath, "--values", path, chartDir).CombinedOutput()
 				if err != nil {
-					return fmt.Errorf("rendering chart with fixture %q: %s", fixture.Name(), string(out))
+					return fmt.Errorf("rendering chart with fixture %q: %s", path, string(out))
 				}
 				return nil
 			})
+
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("reading fixtures: %s", err)
 		}
 	}
 

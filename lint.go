@@ -34,6 +34,20 @@ func Lint(t T, args ...Option) {
 		t.Fatalf("finalizing configuration: %s", err)
 	}
 
+	if out, err := exec.Command("helm", "version").CombinedOutput(); err != nil {
+		if len(out) == 0 {
+			out = []byte(err.Error())
+		}
+		t.Fatalf("it appears that Helm is not installed (output: %s)", string(out))
+	}
+
+	if out, err := exec.Command("conftest", "--version").CombinedOutput(); err != nil {
+		if len(out) == 0 {
+			out = []byte(err.Error())
+		}
+		t.Fatalf("it appears that Helm is not installed (output: %s)", string(out))
+	}
+
 	// Setup
 	var grp errgroup.Group
 	grp.SetLimit(opts.Concurrency)

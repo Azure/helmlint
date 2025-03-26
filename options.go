@@ -1,9 +1,12 @@
 package helmlint
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Option func(*options)
@@ -56,6 +59,59 @@ func WithPoliciesDir(dir string) Option {
 	}
 }
 
+// WithRecursion provides a hook for extracting a k8s manifest to be linted out of another resource.
+// For example: if a chart renders some resources into a configmap, this hook can be used to lint the "nested" resources.
+// Only the WithPolicyDir option is supported.
+func WithRecursion(fn RecursionFn, opts ...Option) Option {
+	return func(o *options) {
+		ruleOpts := &options{ChartDir: o.ChartDir, PoliciesDir: o.PoliciesDir}
+		for _, opt := range opts {
+			opt(ruleOpts)
+		}
+		if err := ruleOpts.Finalize(); err != nil {
+			panic(fmt.Errorf("finalizing rule configuration failed (very unlikely): %s", err))
+		}
+
+		o.Recursions = append(o.Recursions, &recursionRule{
+			Fn:   fn,
+			Opts: ruleOpts,
+		})
+	}
+}
+
+type RecursionFn func(renderedDir, outputDir string) error
+
+type recursionRule struct {
+	Fn   RecursionFn
+	Opts *options
+}
+
+// RecurseConfigmap recurses into resource manifests stored in each key of a ConfigMap at the given file path relative to the chart output.
+func RecurseConfigmap(manifestPath string) RecursionFn {
+	return func(chartDir, outputDir string) error {
+		confMap := struct {
+			Data map[string]string
+		}{}
+
+		body, err := os.ReadFile(filepath.Join(chartDir, manifestPath))
+		if err != nil {
+			return err
+		}
+
+		if err := yaml.Unmarshal(body, &confMap); err != nil {
+			return err
+		}
+
+		for key, value := range confMap.Data {
+			err = os.WriteFile(filepath.Join(outputDir, key+".yaml"), []byte(value), 0644)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
 type options struct {
 	Preserve        bool
 	WriteExceptions bool
@@ -63,6 +119,7 @@ type options struct {
 	ChartDir        string
 	FixturesDir     string
 	PoliciesDir     string
+	Recursions      []*recursionRule
 }
 
 func (o *options) Finalize() (err error) {

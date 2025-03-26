@@ -1,6 +1,8 @@
 package helmlint
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,8 +10,45 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func TestHappyPath(t *testing.T) {
-	Lint(t, WithChartDir("fixtures/happy-path"))
+func TestHappyPath_Simple(t *testing.T) {
+	Lint(t, WithChartDir("fixtures/simple"))
+}
+
+func TestLintFailure_Simple(t *testing.T) {
+	ft := &fakeT{T: t}
+	Lint(ft, WithChartDir("fixtures/simple"), WithPoliciesDir("bad-policies"))
+	require.Len(t, ft.Errors, 1)
+	assert.Contains(t, ft.Errors[0], "simple-example must not include the forbidden label")
+}
+
+func TestHappyPath_Recursion(t *testing.T) {
+	Lint(t,
+		WithChartDir("fixtures/recursive"),
+		WithRecursion(RecurseConfigmap("recursive/templates/configmap.yaml")),
+	)
+}
+
+func TestLintFailure_Recursion(t *testing.T) {
+	ft := &fakeT{T: t}
+	Lint(ft,
+		WithChartDir("fixtures/recursive"),
+		WithRecursion(RecurseConfigmap("recursive/templates/configmap.yaml"), WithPoliciesDir("bad-policies")),
+	)
+	require.Len(t, ft.Errors, 1)
+	assert.Contains(t, ft.Errors[0], "simple-example-deploy must not include the forbidden label")
+}
+
+func TestLintFailure_Recursion_TopLevel(t *testing.T) {
+	ft := &fakeT{T: t}
+	Lint(ft,
+		WithChartDir("fixtures/recursive"),
+		WithPoliciesDir("bad-policies"),
+		WithRecursion(RecurseConfigmap("recursive/templates/configmap.yaml")),
+	)
+	require.Len(t, ft.Errors, 2)
+	slices.Sort(ft.Errors)
+	assert.Contains(t, ft.Errors[0], "simple-example-cm must not include the forbidden label")
+	assert.Contains(t, ft.Errors[1], "simple-example-deploy must not include the forbidden label")
 }
 
 func TestCommentInjection(t *testing.T) {
@@ -65,4 +104,15 @@ func TestFindIndentation_UnIndentedIf_MultilineStr(t *testing.T) {
 func TestCreateTempDir(t *testing.T) {
 	dir := createTempDir(t, &options{})
 	assert.NotEmpty(t, dir)
+}
+
+type fakeT struct {
+	*testing.T
+	Errors []string
+}
+
+func (f *fakeT) Errorf(format string, args ...interface{}) {
+	str := fmt.Sprintf(format, args...)
+	f.T.Logf("Errorf was called:\n%s", str)
+	f.Errors = append(f.Errors, str)
 }

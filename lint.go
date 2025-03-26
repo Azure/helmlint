@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"testing"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,7 +22,14 @@ import (
 // - Hooks for arbitrary funcs to walk the rendered snapshots
 // - Support custom conftest binary?
 
-func Lint(t *testing.T, args ...Option) {
+type T interface {
+	Logf(format string, args ...interface{})
+	Errorf(format string, args ...interface{})
+	Fatalf(format string, args ...interface{})
+	Cleanup(func())
+}
+
+func Lint(t T, args ...Option) {
 	opts := &options{}
 	for _, opt := range args {
 		opt(opts)
@@ -66,7 +72,7 @@ func Lint(t *testing.T, args ...Option) {
 	walkRenderedChart(t, opts, &grp, dir, outputDirs)
 }
 
-func createTempDir(t *testing.T, opts *options) string {
+func createTempDir(t T, opts *options) string {
 	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("creating tempdir: %s", err)
@@ -86,7 +92,7 @@ func createTempDir(t *testing.T, opts *options) string {
 	return dir
 }
 
-func copyChart(t *testing.T, dir, tempDir string) string {
+func copyChart(t T, dir, tempDir string) string {
 	chartDir := filepath.Join(tempDir, "chart")
 	err := exec.Command("cp", "-r", dir, chartDir).Run()
 	if err != nil {
@@ -163,7 +169,7 @@ func findIndentation(lines []string, start int) int {
 	return len(lines[start]) - len(strings.TrimLeft(lines[start], " "))
 }
 
-func renderChart(t *testing.T, opts *options, grp *errgroup.Group, chartDir, resultsDir string) (outputDirs []string) {
+func renderChart(t T, opts *options, grp *errgroup.Group, chartDir, resultsDir string) (outputDirs []string) {
 	start := time.Now()
 	defer func() {
 		t.Logf("rendered the chart for every fixture in %s", time.Since(start))
@@ -239,7 +245,7 @@ func discoverComments(dir string, grp *errgroup.Group) (ids []string, err error)
 	return ids, grp.Wait()
 }
 
-func verifyCoverage(t *testing.T, grp *errgroup.Group, ids map[string]*conditionalDeclRef, seenIDs []string) {
+func verifyCoverage(t T, grp *errgroup.Group, ids map[string]*conditionalDeclRef, seenIDs []string) {
 	for id, def := range ids {
 		grp.Go(func() error {
 			if slices.Contains(seenIDs, id) {
@@ -252,7 +258,7 @@ func verifyCoverage(t *testing.T, grp *errgroup.Group, ids map[string]*condition
 	grp.Wait()
 }
 
-func injectExceptions(t *testing.T, opts *options, ids map[string]*conditionalDeclRef, seenIDs []string) error {
+func injectExceptions(t T, opts *options, ids map[string]*conditionalDeclRef, seenIDs []string) error {
 	byFile := map[string][]*conditionalDeclRef{}
 	for id, def := range ids {
 		if slices.Contains(seenIDs, id) {
@@ -284,7 +290,7 @@ func injectExceptions(t *testing.T, opts *options, ids map[string]*conditionalDe
 	return nil
 }
 
-func walkRenderedChart(t *testing.T, opts *options, grp *errgroup.Group, dir string, outputDirs []string) {
+func walkRenderedChart(t T, opts *options, grp *errgroup.Group, dir string, outputDirs []string) {
 	recursionDir := filepath.Join(dir, "recursions")
 	for _, dir := range outputDirs {
 		grp.Go(func() error {
@@ -315,7 +321,7 @@ func walkRenderedChart(t *testing.T, opts *options, grp *errgroup.Group, dir str
 	grp.Wait() // no need to handle error - the goroutines will fail the test as needed
 }
 
-func runConftest(t *testing.T, policiesDir, dir string) error {
+func runConftest(t T, policiesDir, dir string) error {
 	out, err := exec.Command("conftest", "test", "--policy", policiesDir, dir).CombinedOutput()
 	if err == nil {
 		t.Logf("Conftest output (%s):\n%s", filepath.Base(dir), string(out))

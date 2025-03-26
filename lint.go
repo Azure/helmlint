@@ -185,27 +185,29 @@ func renderChart(t T, opts *options, grp *errgroup.Group, chartDir, resultsDir s
 		t.Logf("rendered the chart for every fixture in %s", time.Since(start))
 	}()
 
-	fixtures, err := os.ReadDir(opts.FixturesDir)
-	if err != nil {
-		t.Fatalf("reading fixtures: %s", err)
-	}
-
-	for _, fixture := range fixtures {
-		if fixture.IsDir() || filepath.Ext(fixture.Name()) != ".yaml" {
-			continue
+	for _, fixturesDir := range opts.FixturesDirs {
+		fixtures, err := os.ReadDir(fixturesDir)
+		if err != nil {
+			t.Fatalf("reading fixtures: %s", err)
 		}
 
-		fixturePath := filepath.Join(opts.FixturesDir, fixture.Name())
-		outputPath := filepath.Join(resultsDir, fixture.Name()[:len(fixture.Name())-len(".yaml")])
-		outputDirs = append(outputDirs, outputPath)
-
-		grp.Go(func() error {
-			out, err := exec.Command("helm", "template", "--output-dir", outputPath, "--values", fixturePath, chartDir).CombinedOutput()
-			if err != nil {
-				return fmt.Errorf("rendering chart with fixture %q: %s", fixture.Name(), string(out))
+		for _, fixture := range fixtures {
+			if fixture.IsDir() || filepath.Ext(fixture.Name()) != ".yaml" {
+				continue
 			}
-			return nil
-		})
+
+			fixturePath := filepath.Join(fixturesDir, fixture.Name())
+			outputPath := filepath.Join(resultsDir, fixture.Name()[:len(fixture.Name())-len(".yaml")])
+			outputDirs = append(outputDirs, outputPath)
+
+			grp.Go(func() error {
+				out, err := exec.Command("helm", "template", "--output-dir", outputPath, "--values", fixturePath, chartDir).CombinedOutput()
+				if err != nil {
+					return fmt.Errorf("rendering chart with fixture %q: %s", fixture.Name(), string(out))
+				}
+				return nil
+			})
+		}
 	}
 
 	if err := grp.Wait(); err != nil {

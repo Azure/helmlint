@@ -2,8 +2,11 @@ package helmlint
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,6 +23,18 @@ func TestLintFailure_Simple(t *testing.T) {
 	Lint(ft, WithChartDir("fixtures/simple"), WithPoliciesDir("bad-policies"))
 	require.Len(t, ft.Errors, 1)
 	assert.Contains(t, ft.Errors[0], "simple-example must not include the forbidden label")
+}
+
+func TestHappyPath_Simple_Visitor(t *testing.T) {
+	var visited atomic.Bool
+	Lint(t, WithChartDir("fixtures/simple"), WithVisitor(func(t T, dir string) {
+		t.Logf("visiting %s", dir)
+		visited.Store(true)
+
+		_, err := os.Stat(filepath.Join(dir, "simple/templates/deployment.yaml"))
+		require.NoError(t, err)
+	}))
+	assert.True(t, visited.Load())
 }
 
 func TestHappyPath_Recursion(t *testing.T) {

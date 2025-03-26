@@ -1,0 +1,32 @@
+name: Go Unit Tests
+on:
+  push:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: 0 0 * * *
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install Conftest
+        run: |
+          LATEST_VERSION=$(wget -O - "https://api.github.com/repos/open-policy-agent/conftest/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | cut -c 2-)
+          ARCH=$(arch)
+          SYSTEM=$(uname)
+          wget "https://github.com/open-policy-agent/conftest/releases/download/v${LATEST_VERSION}/conftest_${LATEST_VERSION}_${SYSTEM}_${ARCH}.tar.gz"
+          tar xzf conftest_${LATEST_VERSION}_${SYSTEM}_${ARCH}.tar.gz
+          sudo mv conftest /usr/local/bin
+
+      - name: Run tests
+        run: go test -v ./...

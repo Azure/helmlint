@@ -19,8 +19,9 @@ import (
 )
 
 // TODO:
-// - Nested validation (multiple policy dirs?)
 // - Structured comments
+// - Hooks for arbitrary funcs to walk the rendered snapshots
+// - Support custom conftest binary?
 
 func Lint(t *testing.T, args ...Option) {
 	opts := &options{}
@@ -62,7 +63,35 @@ func Lint(t *testing.T, args ...Option) {
 		verifyCoverage(t, &grp, ids, seenIDs)
 	}
 
-	runConftest(t, opts, &grp, outputDirs)
+	recursionDir := filepath.Join(dir, "recursions")
+	for _, dir := range outputDirs {
+		grp.Go(func() error {
+			return runConftest(t, opts.PoliciesDir, dir)
+		})
+
+		// "recurse" into resources contained within rendered resources
+		for i, rule := range opts.Recursions {
+			target := filepath.Join(recursionDir, fmt.Sprintf("%s-recursion-%d", filepath.Base(dir), i))
+			if err := os.MkdirAll(target, 0755); err != nil {
+				t.Errorf("unable to create recursion directory: %s", err)
+				continue
+			}
+
+			grp.Go(func() error {
+				if err := rule.Fn(dir, target); err != nil {
+					t.Errorf("error in recursion function: %s", err)
+					return err
+				}
+				files, _ := os.ReadDir(target)
+				if len(files) == 0 {
+					return nil // nothing to do
+				}
+				return runConftest(t, rule.Opts.PoliciesDir, target)
+			})
+		}
+	}
+
+	grp.Wait() // no need to handle error - the goroutines will fail the test as needed
 }
 
 func createTempDir(t *testing.T, opts *options) string {
@@ -283,20 +312,15 @@ func injectExceptions(t *testing.T, opts *options, ids map[string]*conditionalDe
 	return nil
 }
 
-func runConftest(t *testing.T, opts *options, grp *errgroup.Group, outputDirs []string) {
-	for _, dir := range outputDirs {
-		grp.Go(func() error {
-			out, err := exec.Command("conftest", "test", "--policy", opts.PoliciesDir, dir).CombinedOutput()
-			if err != nil {
-				if len(out) == 0 {
-					out = []byte(err.Error())
-				}
-				t.Errorf("Conftest failure (%s):\n%s", filepath.Base(dir), string(out))
-				return err
-			}
-			t.Logf("Conftest output (%s):\n%s", filepath.Base(dir), string(out))
-			return nil
-		})
+func runConftest(t *testing.T, policiesDir, dir string) error {
+	out, err := exec.Command("conftest", "test", "--policy", policiesDir, dir).CombinedOutput()
+	if err == nil {
+		t.Logf("Conftest output (%s):\n%s", filepath.Base(dir), string(out))
+		return nil
 	}
-	grp.Wait()
+	if len(out) == 0 {
+		out = []byte(err.Error())
+	}
+	t.Errorf("Conftest failure (%s):\n%s", filepath.Base(dir), string(out))
+	return err
 }

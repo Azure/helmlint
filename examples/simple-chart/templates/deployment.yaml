@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-example
+  labels:
+    example.com/required-label: "it's necessary"
+
+{{- if .Values.breakThings }}
+    example.com/forbidden-label: "it's forbidden"
+{{- end }}
+
+{{- if .Values.extraThings }}
+    example.com/extra-label: "it's fine"
+{{- end }}
+
+{{- if .Values.notCovered }}
+    example.com/not-a-label: "this one will never be included"
+{{- end }}

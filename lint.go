@@ -63,35 +63,7 @@ func Lint(t *testing.T, args ...Option) {
 		verifyCoverage(t, &grp, ids, seenIDs)
 	}
 
-	recursionDir := filepath.Join(dir, "recursions")
-	for _, dir := range outputDirs {
-		grp.Go(func() error {
-			return runConftest(t, opts.PoliciesDir, dir)
-		})
-
-		// "recurse" into resources contained within rendered resources
-		for i, rule := range opts.Recursions {
-			target := filepath.Join(recursionDir, fmt.Sprintf("%s-recursion-%d", filepath.Base(dir), i))
-			if err := os.MkdirAll(target, 0755); err != nil {
-				t.Errorf("unable to create recursion directory: %s", err)
-				continue
-			}
-
-			grp.Go(func() error {
-				if err := rule.Fn(dir, target); err != nil {
-					t.Errorf("error in recursion function: %s", err)
-					return err
-				}
-				files, _ := os.ReadDir(target)
-				if len(files) == 0 {
-					return nil // nothing to do
-				}
-				return runConftest(t, rule.Opts.PoliciesDir, target)
-			})
-		}
-	}
-
-	grp.Wait() // no need to handle error - the goroutines will fail the test as needed
+	walkRenderedChart(t, opts, &grp, dir, outputDirs)
 }
 
 func createTempDir(t *testing.T, opts *options) string {
@@ -310,6 +282,37 @@ func injectExceptions(t *testing.T, opts *options, ids map[string]*conditionalDe
 	}
 
 	return nil
+}
+
+func walkRenderedChart(t *testing.T, opts *options, grp *errgroup.Group, dir string, outputDirs []string) {
+	recursionDir := filepath.Join(dir, "recursions")
+	for _, dir := range outputDirs {
+		grp.Go(func() error {
+			return runConftest(t, opts.PoliciesDir, dir)
+		})
+
+		// "recurse" into resources contained within rendered resources
+		for i, rule := range opts.Recursions {
+			target := filepath.Join(recursionDir, fmt.Sprintf("%s-recursion-%d", filepath.Base(dir), i))
+			if err := os.MkdirAll(target, 0755); err != nil {
+				t.Errorf("unable to create recursion directory: %s", err)
+				continue
+			}
+
+			grp.Go(func() error {
+				if err := rule.Fn(dir, target); err != nil {
+					t.Errorf("error in recursion function: %s", err)
+					return err
+				}
+				files, _ := os.ReadDir(target)
+				if len(files) == 0 {
+					return nil // nothing to do
+				}
+				return runConftest(t, rule.Opts.PoliciesDir, target)
+			})
+		}
+	}
+	grp.Wait() // no need to handle error - the goroutines will fail the test as needed
 }
 
 func runConftest(t *testing.T, policiesDir, dir string) error {

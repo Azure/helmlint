@@ -139,9 +139,7 @@ func injectComments(dir string, grp *errgroup.Group) (map[string]*conditionalDec
 
 			lines := strings.Split(string(content), "\n")
 			for i, line := range lines {
-				if !conditionalRegex.MatchString(line) ||
-					strings.Contains(lines[i], "helmlint:ignore") ||
-					(i > 0 && strings.Contains(lines[i-1], "helmlint:ignore")) {
+				if !conditionalRegex.MatchString(line) || strings.Contains(lines[i], "helmlint:ignore") {
 					continue
 				}
 				id := uuid.NewString()
@@ -287,8 +285,7 @@ func injectExceptions(t T, opts *options, ids map[string]*conditionalDeclRef, se
 
 		lines := strings.Split(string(file), "\n")
 		for _, def := range defs {
-			indentation := strings.Repeat(" ", findIndentation(lines, def.Line))
-			lines[def.Line] = fmt.Sprintf("%s{{/* helmlint:ignore */}}", indentation) + "\n" + lines[def.Line]
+			lines[def.Line] += "{{/* helmlint:ignore */}}"
 		}
 
 		err = os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644)

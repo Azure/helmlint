@@ -1,0 +1,8 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-example
+{{- if false }}
+  labels:
+    example.com/forbidden-label: {{ .Values.value }}
+{{- end }}

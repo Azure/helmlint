@@ -1,19 +1,23 @@
 # `helmlint`
 
-> Work in progress!
+Go library for testing Helm charts.
 
 
 ## Why?
 
-TODO
+A way to parse Helm charts into a complete AST doesn't currently exist.
+Good parsers exist for Go templates and YAML, but not Go templates + YAML.
+For large charts it's important to lint every branch of the chart's control flow.
+But without an AST it's impossible to know when a branch isn't reached.
 
+`helmlint` provides a workaround: injecting comments under every `if` statement and checking for them in the rendered chart output.
+Missing comments will fail the test unless ignored.
+
+The library uses `conftest` to handle the actual linting (bring your own policies).
 
 ## Usage
 
-```bash
-go install github.com/Azure/helmlint@latest
-helmlint ./path/to/chart
-```
+See the examples directory to get started and the Godocs for complete documentation of more obscure options.
 
 
 ## Contributing
